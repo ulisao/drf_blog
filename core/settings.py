@@ -23,6 +23,7 @@ environ.Env.read_env()
 
 # SECURITY WARNING: keep the secret key used in production secret!
 SECRET_KEY = env("SECRET_KEY")
+VALID_API_KEYS = env.str("VALID_API_KEYS").split(",")
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
@@ -49,9 +50,22 @@ THIRD_PARTY_APPS = [
   'rest_framework',
   'channels',
   'channels_redis',
+  'ckeditor',
+  'ckeditor_uploader',
+  'django_celery_results',
+  'django_celery_beat',
+  'rest_framework_api'
 ]
 
 INSTALLED_APPS = DJANGO_APPS + PROJECT_APPS + THIRD_PARTY_APPS
+
+CKEDITOR_CONFIGS = {
+    'default': {
+        'toolbar': 'full',
+        'autoParagraph': False,
+    },
+}
+CKEDITOR_UPLOAD_PATH = "media/"
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
@@ -138,6 +152,8 @@ USE_TZ = True
 STATIC_LOCATION = "static"
 STATIC_URL = 'static/'
 STATIC_ROOT = os.path.join(BASE_DIR, "static")
+MEDIA_URL = 'media/'
+MEDIA_ROOT = os.path.join(BASE_DIR, "media")
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
@@ -159,6 +175,7 @@ CHANNEL_LAYERS = {
     },
 }
 
+REDIS_HOST = env("REDIS_HOST")
 CACHE = {
   "default": {
       "BACKEND": "django_redis.cache.RedisCache",
@@ -172,3 +189,24 @@ CACHE = {
 CHANNELS_ALLOWED_ORIGINS = [
     "http://localhost:3000",
 ]   
+
+
+CELERY_ACCEPT_CONTENT = ['json']
+CELERY_TASK_SERIALIZER = 'json'
+CELERY_RESULT_SERIALIZER = 'json'
+CELERY_TIMEZONE = 'America/Argentina/Buenos_Aires'
+CELERY_BROKER_URL = env("REDIS_URL")
+CELERY_BROKER_TRANSPORT_OPTIONS = {
+  'visibility_timeout': 3600,
+  'socket_timeout': 5,
+  'retry_on_timeout': True,
+}
+CELERY_RESULT_BACKEND = 'django-db'
+CELERY_CACHE_BACKEND = 'default'
+CELERY_IMPORTS = (
+  'core.tasks', 
+  'apps.blog.tasks',
+)
+
+CELERY_BEAT_SCHEDULER = 'django_celery_beat.schedulers:DatabaseScheduler'
+CELERY_BEAT_SCHEDULE = {}
