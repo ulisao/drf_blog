@@ -26,6 +26,51 @@ class Category(models.Model):
     def __str__(self):
         return self.name
 
+class CategoryView(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    category = models.ForeignKey(Category, related_name='category_view', on_delete=models.CASCADE)
+    ip_address = models.GenericIPAddressField()
+    timestamp = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"View of {self.category.name} from {self.ip_address} at {self.timestamp}"
+
+class CategoryAnalytics(models.Model):
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    category = models.OneToOneField(Category, on_delete=models.CASCADE, related_name='category_analytics')
+
+    views = models.PositiveIntegerField(default=0)
+    impressions = models.PositiveIntegerField(default=0)
+    clicks = models.PositiveIntegerField(default=0)
+    click_through_rate = models.FloatField(default=0)
+    avg_time_on_page = models.FloatField(default=0)
+
+    def _update_click_through_rate(self):
+        if self.impressions > 0:
+            self.click_through_rate = (self.clicks/self.impressions) * 100
+        else:
+            self.click_through_rate = 0
+        self.save()
+
+    def increment_click(self):
+        self.clicks += 1
+        self.save()
+        self._update_click_through_rate()
+    
+
+    def increment_impression(self):
+        self.impressions += 1
+        self.save()
+        self._update_click_through_rate()
+
+    def increment_view(self, ip_address):
+        if not CategoryView.objects.filter(category=self.category, ip_address=ip_address).exists():
+            CategoryView.objects.create(category=self.category, ip_address=ip_address)
+
+            self.views += 1
+            self.save()
+
 class Post(models.Model):
 
     class PostObjects(models.Manager):
@@ -135,3 +180,8 @@ class Heading(models.Model):
 def create_post_analytics(sender, instance, created, **kwargs):
     if created:
         PostAnalytics.objects.create(post=instance)
+
+@receiver(post_save, sender=Category)
+def create_category_analytics(sender, instance, created, **kwargs):
+    if created:
+        CategoryAnalytics.objects.create(category=instance)

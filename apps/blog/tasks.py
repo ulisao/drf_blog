@@ -1,6 +1,6 @@
 from celery import shared_task
 import logging
-from .models import PostAnalytics, Post
+from .models import PostAnalytics, Post, CategoryAnalytics, Category
 import redis
 from django.conf import settings
 
@@ -24,14 +24,25 @@ def sync_impressions_to_db():
     for key in keys:
       try:
         post_id = key.decode("utf-8").split(":")[-1]
-        impressions = int(redis_client.get(key))
         
-        analytics, _ = PostAnalytics.objects.get_or_create(post__id=post_id)
+        try:
+          post = Post.objects.get(id=post_id)
+        except Post.DoesNotExist:
+          logger.info(f"Post with ID {post_id} does not exist.")
+          continue
+        
+        impressions = int(redis_client.get(key))
+        if impressions == 0:
+          redis_client.delete(key)
+          continue 
+        
+        analytics, created = PostAnalytics.objects.get_or_create(post=post)
         analytics.impressions += impressions
         analytics.save()
         analytics._update_click_through_rate()
         
         redis_client.delete(key)
+        
       except Exception as e:
         logger.error(f"Error syncing impressions to DB: {e}")
         
@@ -43,3 +54,34 @@ def increment_post_views(slug, ip_address):
     post_analytics.increment_view(ip_address)
   except Exception as e:
     logger.error(f"Error incrementing views for post {slug}: {e}")
+    
+@shared_task
+def sync_category_impressions_to_db():
+  # Aggregate all impression counts from Redis and update the database
+
+    keys = redis_client.keys("category:impressions:*")
+    for key in keys:
+      try:
+        category_id = key.decode("utf-8").split(":")[-1]
+        
+        try:
+          category = Category.objects.get(id=category_id)
+        except Category.DoesNotExist:
+          logger.info(f"Category with ID {category_id} does not exist.")
+          continue
+
+        impressions = int(redis_client.get(key))
+        if impressions == 0:
+          redis_client.delete(key)
+          continue       
+        
+        analytics, created = CategoryAnalytics.objects.get_or_create(category=category)
+        analytics.impressions += impressions
+        analytics.save()
+        analytics._update_click_through_rate()
+        
+        redis_client.delete(key)
+        
+      except Exception as e:
+        logger.error(f"Error syncing impressions to DB: {e}")
+ 
